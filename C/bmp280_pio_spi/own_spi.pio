@@ -1,0 +1,51 @@
+.program own_spi_read
+.side_set 1 opt pindirs
+
+	;wait for CSN to be idle, or operation timed out while waiting
+	wait 1 pin 1
+	
+	nop            side 1											;SCK 1 (SPI mode '11')
+	set pindirs, 0													;CSN 0 (START condition)
+
+bitloop1:
+	nop            side 0											;SCK 0
+	out pindirs, 1													;TX to mode + register address
+	nop            side 1											;SCK 1
+	jmp !osre bitloop1												;send until OSR is empty
+
+byteloop:
+	set x, 7
+bitloop2:
+	nop            side 0											;SCK 0
+	nop            side 1											;SCK 1
+	in pins, 1														;read target data
+	jmp x-- bitloop2												;read 8-bit data = 1 byte
+	jmp y-- byteloop												;until expected read byte count reached
+
+	set pindirs, 1													;CSN 1 (STOP condition)
+
+.wrap_target
+	irq wait 0            [7]										;notify that operation has completed
+;***************************************************************************************
+.program own_spi_write
+.side_set 1 opt pindirs
+
+	;wait for CSN to be idle, or operation timed out while waiting
+	wait 1 pin 1
+	
+	nop            side 1											;SCK 1 (SPI mode '11')
+	set pindirs, 0													;CSN 0 (START condition)
+
+byteloop:
+	set x, 7
+bitloop:
+	nop            side 0											;SCK 0
+	out pindirs, 1													;TX to data bit
+	nop            side 1											;SCK 1
+	jmp x-- bitloop													;write 8-bit data = 1 byte
+	jmp y-- byteloop												;until expected write byte count reached
+
+	set pindirs, 1													;CSN 1 (STOP condition)
+
+.wrap_target
+	irq wait 0            [7]										;notify that operation has completed

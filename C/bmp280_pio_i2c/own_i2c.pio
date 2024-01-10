@@ -1,0 +1,92 @@
+.program own_i2c_begin
+.side_set 1 opt pindirs
+
+	;wait for bus to be idle, or operation timed out while waiting
+	wait 1 pin 1
+	wait 1 pin 0
+
+	set pindirs, 0        [4]										;SDA 0 (START condition)
+
+bitloop:
+	nop            side 0											;SCL 0
+	out pindirs, 1        [4]										;SDA to data bit
+	nop            side 1											;SCL 1
+	wait 1 pin 1          [3]										;clock stretching
+	jmp !osre bitloop												;send until OSR is empty
+
+	nop            side 0											;SCL 0
+	set pindirs, 1        [4]										;SDA to hi-Z
+	nop            side 1											;SCL 1
+	wait 1 pin 1													;clock stretching
+	in pins, 1														;read ACK status, autopush to RX FIFO
+.wrap_target
+	irq wait 0            [7]										;notify that operation has completed
+;***************************************************************************************
+.program own_i2c_keep
+.side_set 1 opt pindirs
+
+	;this assumes SCL is high as per 9th clock for ACK/NACK signal
+	nop            side 0											;SCL 0
+	set pindirs, 1        [4]										;SDA 1
+	nop            side 1											;SCL 1
+.wrap_target
+	irq wait 0            [7]										;notify that operation has completed
+;***************************************************************************************
+.program own_i2c_read
+.side_set 1 opt pindirs
+
+byteloop:
+	set x, 7
+bitloop:
+	nop            side 0											;SCL 0
+	set pindirs, 1        [4]										;SDA to hi-Z, target will set SDA
+	nop            side 1											;SCL 1
+	wait 1 pin 1          [3]										;clock stretching
+	in pins, 1														;read target data
+	jmp x-- bitloop													;read 8-bit data = 1 byte
+	
+	nop            side 0											;SCL 0
+	out pindirs, 1        [4]										;ACK/NACK to target data
+	nop            side 1											;SCL 1
+	wait 1 pin 1          [3]										;clock stretching
+	jmp y-- byteloop												;until expected read byte count reached
+.wrap_target
+	irq wait 0            [7]										;notify that operation has completed
+;***************************************************************************************
+.program own_i2c_stop
+.side_set 1 opt pindirs
+
+	;this assumes SCL is high as per 9th clock for ACK/NACK signal
+	nop            side 0											;SCL 0
+	set pindirs, 0        [4]										;SDA 0
+	nop            side 1 [4]										;SCL 1
+	set pindirs, 1        [4]										;SDA 1
+.wrap_target
+	irq wait 0            [7]										;notify that operation has completed
+;***************************************************************************************
+.program own_i2c_write
+.side_set 1 opt pindirs
+
+byteloop:
+	set x, 7
+bitloop:
+	nop            side 0											;SCL 0
+	out pindirs, 1        [4]										;SDA to data bit
+	nop            side 1											;SCL 1
+	wait 1 pin 1          [3]										;clock stretching
+	jmp x-- bitloop													;write 8-bit data = 1 byte
+	
+	nop            side 0											;SCL 0
+	set pindirs, 1        [4]										;SDA to hi-Z
+	nop            side 1											;SCL 1
+	wait 1 pin 1													;clock stretching
+	jmp pin, nack													;got NACK from target
+	jmp y-- byteloop												;until expected write byte count reached
+	jmp end
+
+nack:
+	push noblock													;push to RX FIFO as NACK signal
+
+end:
+.wrap_target
+	irq wait 0            [7]										;notify that operation has completed

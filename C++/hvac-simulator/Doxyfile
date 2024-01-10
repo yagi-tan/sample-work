@@ -1,0 +1,15 @@
+PROJECT_NAME           = "HVAC simulator server"
+BUILTIN_STL_SUPPORT    = YES
+BRIEF_MEMBER_DESC      = NO
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = YES
+EXTRACT_STATIC         = YES
+FORCE_LOCAL_INCLUDES   = YES
+SHOW_INCLUDE_FILES     = NO
+QUIET                  = YES
+WARN_NO_PARAMDOC       = YES
+INPUT                  = src/ include/
+RECURSIVE              = YES
+SOURCE_BROWSER         = NO
+VERBATIM_HEADERS       = NO
+GENERATE_LATEX         = NO

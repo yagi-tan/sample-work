@@ -1,0 +1,13 @@
+PROJECT_NAME           = "Pico BMP280 communications"
+BRIEF_MEMBER_DESC      = NO
+HTML_OUTPUT            = bmp280_html
+EXTRACT_ALL            = YES
+SHOW_INCLUDE_FILES     = NO
+QUIET                  = YES
+WARN_NO_PARAMDOC       = YES
+EXCLUDE                = .git/
+INPUT                  = bmp280_pio_i2c/ bmp280_pio_spi/ logic_analyser/ utilities/
+RECURSIVE              = NO
+SOURCE_BROWSER         = NO
+VERBATIM_HEADERS       = NO
+GENERATE_LATEX         = NO

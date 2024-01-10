@@ -1,0 +1,1 @@
+This is just a collection of personal work samples that may or may not be complete, depending on project.
