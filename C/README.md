@@ -12,6 +12,10 @@ I2C-based interface for Raspberry Pi Pico and BMP280 sensor. Refer to [original 
 
 Function to sample GPIO pin(s) and record their result to be sent to user later, currently via UART with USB is in progress. Refer to [original example](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser/logic_analyser.c) for comparison, mostly restructure to make setup (multiple pin groups with different data rate) and transport (data format during transfer) easier.
 
+# [usb_host_low](./usb_host_low)
+
+Linux v6.1.66 kernel module (LKM) that is supposed to interact with logic analyser above. It provides character device files as data source to be read (one for each logic analyser channel) and sysfs attributes as control interface (set number of channels, each channel configuration). Based on [USB module sample](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/drivers/usb/usb-skeleton.c?h=v6.1.66) for USB parts, and [LKM programming guide](https://sysprog21.github.io/lkmpg/) for sysfs and character device file usage.
+
 # [utilities](./utilities)
 
 Due to mistake in preparing the hardware, the UART part of UART-to-USB adapter is actually serial UART instead of TTL while the Pico UART pins expect the latter, resulting in unusable first bit for each byte. `send_*` functions are used to deal with this.

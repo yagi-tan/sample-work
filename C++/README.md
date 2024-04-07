@@ -10,3 +10,7 @@ This folder implements serial (TTY) device reader with options on how to display
 #input from adapter, disable output to console, write to 'sampling.bin', no timestamp
 ./serial -i /dev/ttyUSB0 -m 0 -o sampling.bin
 ```
+
+# [usb_device_dummy](./usb_device_dummy)
+
+[Raw Gadget](https://github.com/xairy/raw-gadget)-based USB device to emulate [logic analyser](../C/logic_analyser) running on Pico to test [Linux kernel module](../C/usb_host_low). It generates alternating high-low readings as dummy data.

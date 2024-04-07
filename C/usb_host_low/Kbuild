@@ -1,0 +1,2 @@
+ccflags-y += -g -DDEBUG
+obj-m := usb_host_low.o
