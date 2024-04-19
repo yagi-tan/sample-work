@@ -1,0 +1,98 @@
+info:
+  title: usb_web_backend API
+  version: 1.0.0
+  description: REST+WebSockets server backend for logic analyser web interface-based client.
+  contact:
+    name: yagi-tan
+    url: https://github.com/yagi-tan/sample-work
+openapi: 3.1.0
+servers:
+- description: Node.js test server.
+  url: http://localhost:60001
+components:
+  parameters:
+    ChannelCount:
+      name: count
+      description: Device channel count.
+      in: path
+      required: true
+      schema:
+        type: number
+        minimum: 0
+        maximum: 15
+    ChannelId:
+      name: chId
+      description: Channel ID.
+      in: path
+      required: true
+      schema:
+        type: number
+        minimum: 0
+        maximum: 15
+  schemas:
+    CdevObject:
+      type: object
+      properties:
+        path:
+          type: string
+        major:
+          type: number
+        minor:
+          type: number
+      required:
+      - path
+      - major
+      - minor
+    ChannelConfigObject:
+      type: object
+      properties:
+        pinbase:
+          description: Pin base index.
+          type: number
+          minimum: 0
+          maximum: 25
+        pincount:
+          description: Pin count.
+          type: number
+          enum:
+          - 1
+          - 2
+          - 4
+          - 8
+        rate:
+          description: Sampling rate, in Hz.
+          type: number
+          minimum: 1
+          maximum: 125000000
+      required:
+      - pinbase
+      - pincount
+      - rate
+    SysfsObject:
+      type: object
+      properties:
+        path:
+          type: string
+      required:
+      - path
+    ErrorObject:
+      type: object
+      properties:
+        type:
+          description: Error type.
+          type: string
+        msg:
+          description: Details of the error.
+          type: string
+        errors:
+          description: Collection of sub-errors occurred for this event.
+          type: array
+          items:
+            type: string
+      required:
+      - type
+      - msg
+tags:
+- name: Cdev
+- name: Channel
+- name: Sysfs
