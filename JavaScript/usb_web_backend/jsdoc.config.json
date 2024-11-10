@@ -2,7 +2,7 @@
 	"plugins": [],
 	"recurseDepth": 10,
 	"source": {
-		"include": ["index.js", "utils.js", "model", "routes"],
+		"include": ["index.js", "utils.js", "model", "routes", "wasm_cpp"],
 		"includePattern": ".+\\.js$"
 	},
 	"sourceType": "module",

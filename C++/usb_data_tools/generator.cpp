@@ -1,4 +1,4 @@
-#include "generator.h"
+#include "data_tools.h"
 #include "main.h"
 
 #include <algorithm>
@@ -11,13 +11,13 @@
 #include <set>
 
 //! Single channel data generator as logic analyser readings.
-class Channel {
+class Generator {
 	using steady_clock = std::chrono::steady_clock;
 	using time_point = std::chrono::time_point<steady_clock>;
 	
 public:
 	//! Constructor.
-	Channel() noexcept : lastReadTs{steady_clock::now()} {
+	Generator() noexcept {
 		cfg.idx = 0u;
 		cfg.pinbase = 0u;
 		cfg.pincount = 0u;
@@ -27,8 +27,8 @@ public:
 	}
 	
 	//! Destructor.
-	virtual ~Channel() {
-		SPDLOG_WARN("channel {} removed.", cfg.idx);
+	virtual ~Generator() {
+		SPDLOG_WARN("Channel {} removed.", cfg.idx);
 	}
 	
 	//! Get channel readings.
@@ -41,8 +41,8 @@ public:
 		const time_point now = steady_clock::now();
 		const uint64_t smps = std::chrono::duration<double>(now - lastReadTs).count() * cfg.rate;
 		
-		if (!smps) {
-			SPDLOG_WARN("channel {} has no new sample since last reading.", cfg.idx);
+		if (!smps) [[unlikely]] {
+			SPDLOG_WARN("Channel {} has no new sample since last reading.", cfg.idx);
 			return false;
 		}
 		
@@ -61,15 +61,15 @@ public:
 			}
 		}
 		
-		const uint64_t readingsRight = smpsRight / SAMPLE_PER_READING + !!(smpsRight % SAMPLE_PER_READING);
+		//rightmost reading may have incomplete group of samples
+		const uint64_t readsRight = smpsRight / SAMPLE_PER_READING + !!(smpsRight % SAMPLE_PER_READING);
 		//******************************************************************************
 		
 		ch_data obj;
 		const uint8_t *pobj = reinterpret_cast<uint8_t*>(&obj);
 		
 		//! Helper function to add latest (right-side) readings.
-		auto addSampleRight = [this, &data, &obj, &smpsRight, pobj]() -> void {
-			std::fill_n(obj.data, SAMPLE_PER_READING, (1u << cfg.pincount) - 1u);
+		auto addReading = [this, &data, &obj, &smpsRight, pobj]() -> void {
 			obj.valid = (1u << SAMPLE_BITS) - 1u;
 			lastReadQt = smpsRight % SAMPLE_PER_READING;			//last reading sample count
 			
@@ -77,12 +77,12 @@ public:
 				++obj.tag;
 				
 				if (smpsRight >= SAMPLE_PER_READING) [[likely]] {
+					addSample(obj.data, 0u, SAMPLE_PER_READING);
 					smpsRight -= SAMPLE_PER_READING;
 				}
 				else {
-					const uint8_t smpsLeft = SAMPLE_PER_READING - smpsRight;
-					std::fill_n(obj.data + smpsRight, smpsLeft, 0u);
-					obj.valid <<= smpsLeft;
+					addSample(obj.data, 0u, smpsRight);
+					obj.valid <<= (SAMPLE_PER_READING - smpsRight);
 					smpsRight = 0u;
 				}
 				
@@ -90,27 +90,26 @@ public:
 			}
 		};
 		
-		if (readingsRight >= count) {								//latest readings are enough
-			obj.tag = tag + (readingsRight - count);
-			smpsRight -= ((readingsRight - count) * SAMPLE_PER_READING);	//remove unused samples
-			addSampleRight();
+		if (readsRight >= count) {									//latest readings are enough
+			obj.tag = tag + (readsRight - count);
+			smpsRight -= ((readsRight - count) * SAMPLE_PER_READING);	//remove unused samples
+			addReading();
 		}
-		else if (readingsRight) {									//complete last reading + new readings
+		else if (readsRight) {										//complete last reading + new readings
 			obj.tag = tag;
 			
 			if (lastReadQt) {
-				std::fill_n(obj.data, lastReadQt, 0u);				//clear already sent data
-				std::fill_n(obj.data + lastReadQt, smpsFill, (1u << cfg.pincount) - 1u);
+				addSample(obj.data, lastReadQt, smpsFill);			//clear already sent data
 				obj.valid = (1u << smpsFill) - 1u;
 				data.insert(data.end(), pobj, pobj + sizeof(obj));
 			}
 			
-			addSampleRight();
+			addReading();
 		}
 		else {														//only enough to fill last reading
 			smpsFill = std::min((uint64_t) smpsFill, smps);			//check if sample is enough for filling
-			std::fill_n(obj.data, SAMPLE_PER_READING, 0u);			//clear already sent data
-			std::fill_n(obj.data + lastReadQt, smpsFill, (1u << cfg.pincount) - 1u);
+			
+			addSample(obj.data, lastReadQt, smpsFill);				//clear already sent data
 			obj.tag = tag;
 			obj.valid = ((1u << smpsFill) - 1u) << (SAMPLE_PER_READING - lastReadQt - smpsFill);
 			
@@ -139,14 +138,14 @@ public:
 	bool setConfig(const ch_config *cfg) {
 		if (validateConfig(cfg)) {
 			if (memcmp(cfg, &this->cfg, sizeof(ch_config))) {
-				SPDLOG_INFO("channel {} config set - base:{} count:{} rate:{}", cfg->idx, cfg->pinbase,
-					cfg->pincount, cfg->rate);
+				SPDLOG_INFO("Channel {} config set - base:{} count:{} rate:{}", cfg->idx, cfg->pinbase,
+							cfg->pincount, cfg->rate);
 				
 				this->cfg = *cfg;
 				resetTracker();
 			}
 			else {
-				SPDLOG_INFO("channel {} config kept unchanged.", cfg->idx);
+				SPDLOG_INFO("Channel {} config kept unchanged.", cfg->idx);
 			}
 			
 			return true;
@@ -164,7 +163,7 @@ public:
 			return false;
 		}
 		
-		std::set<__u8> validPinCounts{1u, 2u, 4u, 8u};				//only these values are acceptable
+		std::set<uint8_t> validPinCounts{1u, 2u, 4u, 8u};				//only these values are acceptable
 		if (!validPinCounts.contains(cfg->pincount)) {
 			SPDLOG_ERROR("Invalid pin count '{}' as channel config.", cfg->pincount);
 			return false;
@@ -179,27 +178,48 @@ public:
 	}
 	
 private:
+	//! Add sample(s) to reading data. Region outside of request will be zeroed out.
+	//! @param[out] data Reading data/sample array.
+	//! @param[in] start Array start index, inclusive. 0 &le; x &lt; \ref SAMPLE_PER_READING.
+	//! @param[in] count Sample count to be added. Must be \b start + \b count &le; \ref SAMPLE_PER_READING.
+	void addSample(uint8_t *data, uint8_t start, uint8_t count) {
+		assert((start >= 0) && (start < SAMPLE_PER_READING));
+		assert((start + count) <= SAMPLE_PER_READING);
+		
+		const uint8_t end = start + count;
+		std::fill_n(data, start, 0u);								//outer left region
+		std::fill_n(data + end, SAMPLE_PER_READING - end, 0u);		//outer right region
+		
+		for (uint8_t idx = start; idx < end; ++idx) {
+			//rightmost pin (lowest index) has fastest level change (every sample). next pin doubles the
+			//clock, and so on.
+			data[idx] = (level++) & ((1u << cfg.pincount) - 1u);
+		}
+	}
+	
 	//! Helper function to reset tracking variables' value.
 	void resetTracker() {
 		lastReadTs = steady_clock::now();
 		lastReadQt = 0u;
 		tag = (1u << TAG_BITS) - 1u;								//+1 will overflow (0) the value
+		level = 0u;
 	}
 	
 	ch_config cfg;
 	time_point lastReadTs;
-	uint8_t lastReadQt;
 	uint32_t tag;													//!< Always points to last used value.
+	uint8_t lastReadQt;
+	uint8_t level;													//!< Level tracker for all pins.
 };
 
-std::map<__u8, std::shared_ptr<Channel>> channels;					//!< Channel index -> channel object.
+static std::map<uint8_t, std::shared_ptr<Generator>> channels;		//!< Channel index -&gt; generator object.
 
 //! Generates data for a channel. For now it's just random data.
 //! @param[in] idx Channel index.
 //! @param[in,out] data Storage to be filled with data.
 //! @param[in] maxSz \b data size won't be larger than this value after filling.
-//! @return True if channel with specified index exists and there's new data being added to \b data.
-bool generateData(__u8 idx, std::deque<uint8_t> &data, size_t maxSz) {
+//! @return True if channel with specified index exists and there's enough space for data.
+bool generateData(uint8_t idx, std::deque<uint8_t> &data, size_t maxSz) {
 	if (data.size() >= maxSz) {
 		SPDLOG_WARN("Storage already full for channel {} data generation.", idx);
 		return true;
@@ -207,17 +227,17 @@ bool generateData(__u8 idx, std::deque<uint8_t> &data, size_t maxSz) {
 	
 	const uint32_t readingCount = (maxSz - data.size()) / sizeof(ch_data);
 	if (!readingCount) {
-		SPDLOG_WARN("Storage space not enough for channel {} data generation.", idx);
+		SPDLOG_ERROR("Storage space not enough for channel {} data generation.", idx);
 		return false;
 	}
 	
 	auto iter = channels.find(idx);
 	if (iter == channels.end()) {
-		SPDLOG_ERROR("channel {} not found for data generation.", idx);
+		SPDLOG_ERROR("Channel {} not found for data generation.", idx);
 		return false;
 	}
 	
-	std::shared_ptr<Channel> channel{iter->second};
+	std::shared_ptr<Generator> channel{iter->second};
 	channel->getData(data, readingCount);
 	
 	return true;
@@ -227,15 +247,15 @@ bool generateData(__u8 idx, std::deque<uint8_t> &data, size_t maxSz) {
 //! @param[in] idx Target channel index.
 //! @param[out] cfg Channel configuration data.
 //! @return True if target channel is found.
-bool getGeneratorConfig(__u8 idx, ch_config *cfg) {
+bool getGeneratorConfig(uint8_t idx, ch_config *cfg) {
 	auto iter = channels.find(idx);
 	
 	if (iter == channels.end()) {
-		SPDLOG_ERROR("channel {} not found to get config.", idx);
+		SPDLOG_ERROR("Channel {} not found to get config.", idx);
 		return false;
 	}
 	
-	*cfg = std::shared_ptr<Channel>{iter->second}->getConfig();
+	*cfg = std::shared_ptr<Generator>{iter->second}->getConfig();
 	
 	return true;
 }
@@ -248,16 +268,16 @@ bool setGeneratorConfig(const ch_config *cfg) {
 	auto iter = channels.find(cfg->idx);
 	
 	if (iter == channels.end()) {
-		if (Channel::validateConfig(cfg)) {							//ensure valid config before obj creation
-			auto obj = new(std::nothrow) Channel();
+		if (Generator::validateConfig(cfg)) {						//ensure valid config before obj creation
+			auto obj = new(std::nothrow) Generator();
 			
 			if (obj) {
 				obj->setConfig(cfg);
 				
-				std::shared_ptr<Channel> channel{obj};
+				std::shared_ptr<Generator> channel{obj};
 				channels.emplace(cfg->idx, channel);
 				
-				SPDLOG_INFO("channel {} added.", cfg->idx);
+				SPDLOG_INFO("Channel {} added.", cfg->idx);
 			}
 			else {
 				SPDLOG_ERROR("Error allocating new channel {} object.", cfg->idx);
@@ -269,7 +289,7 @@ bool setGeneratorConfig(const ch_config *cfg) {
 		}
 	}
 	else {
-		std::shared_ptr<Channel> channel{iter->second};
+		std::shared_ptr<Generator> channel{iter->second};
 		
 		if (!channel->setConfig(cfg)) {
 			channels.erase(iter);

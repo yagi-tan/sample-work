@@ -116,7 +116,11 @@ router.get('/channel/:chId(\\d+)/config', (req, res, next) => {
 		next(cfg);
 	}
 	else {
-		res.status(200).json(cfg);
+		res.status(200).json({
+			'pinbase': cfg.pinbase,
+			'pincount': cfg.pincount,
+			'rate': cfg.rate
+		});
 	}
 });
 router.post('/channel/:chId(\\d+)/config', async (req, res, next) => {
@@ -153,7 +157,7 @@ router.post('/channel/:chId(\\d+)/config', async (req, res, next) => {
  *               type: string
  */
 router.get('/channel/count', (req, res) => {
-	res.status(200).send(`${logicAnalyser.channelCount}`);
+	res.set('Content-Type', 'text/plain').status(200).send(`${logicAnalyser.channelCount}`);
 });
 
 /** @openapi
@@ -227,7 +231,7 @@ router.patch('/channel/count/:count(\\d+)', async (req, res, next) => {
  *               $ref: '#/components/schemas/ErrorObject'
  */
 router.get('/sysfs/path', (req, res) => {
-	res.send(logicAnalyser.pathSysfs);
+	res.status(200).json({path: logicAnalyser.pathSysfs});
 });
 router.post('/sysfs/path', async (req, res, next) => {
 	let err;

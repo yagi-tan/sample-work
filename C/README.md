@@ -12,6 +12,10 @@ I2C-based interface for Raspberry Pi Pico and BMP280 sensor. Refer to [original 
 
 Function to sample GPIO pin(s) and record their result to be sent to user later, currently via UART with USB is in progress. Refer to [original example](https://github.com/raspberrypi/pico-examples/tree/master/pio/logic_analyser/logic_analyser.c) for comparison, mostly restructure to make setup (multiple pin groups with different data rate) and transport (data format during transfer) easier.
 
+# [rpi4_poweroff](./rpi4_poweroff)
+
+Simple program to power-off Raspberry Pi 4 by monitoring specific pin activation using [libgpiod](https://git.kernel.org/pub/scm/libs/libgpiod/libgpiod.git). Power-off is initiated by press-and-hold push button, connected to pin and 3.3V source, for more than 3 seconds.
+
 # [usb_host_low](./usb_host_low)
 
 Linux v6.1.66 kernel module (LKM) that is supposed to interact with logic analyser above. It provides character device files as data source to be read (one for each logic analyser channel) and sysfs attributes as control interface (set number of channels, each channel configuration). Based on [USB module sample](https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/drivers/usb/usb-skeleton.c?h=v6.1.66) for USB parts, and [LKM programming guide](https://sysprog21.github.io/lkmpg/) for sysfs and character device file usage.

@@ -3,6 +3,7 @@
 import logicAnalyser from './model/logicAnalyser.js';
 import routeConfig from './routes/configuration.js';
 import routeCtrl from './routes/control.js';
+const wasmIntf = await import('./wasm_cpp/interface.js');
 
 import express from 'express';
 const app = express();
@@ -12,6 +13,10 @@ const ws = await import('ws');
 
 import http from 'node:http';
 import process from 'node:process';
+
+if (!wasmIntf.initSys()) {
+	throw new Error("Error initialising WASM interface.");
+}
 
 app.use(express.json());
 app.use(express.static('public'));
@@ -65,4 +70,6 @@ process.on('SIGTERM', async () => {
 	serverWs.close(() => console.log('WebSocket server closed.'));
 	
 	server.close(() => console.log('App server closed.'));
+	
+	wasmIntf.exitSys();
 });

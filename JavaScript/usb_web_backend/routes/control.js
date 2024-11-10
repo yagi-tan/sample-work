@@ -6,7 +6,7 @@ import express from 'express';
 const router = express.Router();
 
 /** @openapi
- * /configuration/channel/{chId}:
+ * /control/channel/{chId}:
  *   parameters:
  *   - $ref: '#/components/parameters/ChannelId'
  *   get:
@@ -35,12 +35,12 @@ router.get('/channel/:chId(\\d+)', (req, res, next) => {
 		next(status);
 	}
 	else {
-		res.status(200).send(status);
+		res.set('Content-Type', 'text/plain').status(200).send(status);
 	}
 });
 
 /** @openapi
- * /configuration/channel/{chId}/{status}:
+ * /control/channel/{chId}/{status}:
  *   parameters:
  *   - $ref: '#/components/parameters/ChannelId'
  *   - name: status
